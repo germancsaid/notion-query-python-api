@@ -27,10 +27,8 @@ def get_property_value(property_data):
     prop_type = property_data.get("type")
     
     if prop_type == "title":
-        # Maneja casos donde el título puede estar vacío
         return property_data.get("title")[0].get("plain_text") if property_data.get("title") else ""
     elif prop_type == "rich_text":
-        # Maneja casos donde el rich_text puede estar vacío
         return property_data.get("rich_text")[0].get("plain_text") if property_data.get("rich_text") else ""
     elif prop_type == "number":
         return property_data.get("number")
@@ -57,26 +55,25 @@ def get_property_value(property_data):
         return property_data.get("created_time")
     elif prop_type == "last_edited_time":
         return property_data.get("last_edited_time")
-    # Añade más tipos de propiedades si es necesario
     
     return None
 
 @router.get("/db")
 async def get_notion_clean_data_sorted():
     """
-    Consulta la base de datos de Notion, la ordena, obtiene todos los datos paginados
-    y devuelve una lista con el id y los valores directos de las propiedades.
+    Consulta la base de datos de Notion, la ordena por fecha de creación,
+    obtiene todos los datos paginados y devuelve una lista limpia.
     """
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
     all_results = []
     has_more = True
     next_cursor = None
     
-    # Define la configuración de ordenamiento en el payload
+    # Define la configuración de ordenamiento usando el campo nativo `timestamp`
     sort_payload = {
         "sorts": [
             {
-                "property": "Date de création",
+                "timestamp": "created_time",
                 "direction": "descending"
             }
         ]
@@ -84,7 +81,6 @@ async def get_notion_clean_data_sorted():
 
     try:
         while has_more:
-            # Añade el cursor al payload para la paginación
             if next_cursor:
                 sort_payload["start_cursor"] = next_cursor
 
@@ -97,7 +93,6 @@ async def get_notion_clean_data_sorted():
             has_more = data.get("has_more", False)
             next_cursor = data.get("next_cursor")
 
-        # Procesa los resultados para extraer solo el id y los valores de las propiedades
         clean_results = []
         for item in all_results:
             clean_item = {"id": item.get("id")}
@@ -106,7 +101,6 @@ async def get_notion_clean_data_sorted():
             
             clean_results.append(clean_item)
 
-        # Devuelve la lista limpia de resultados
         return clean_results
 
     except requests.exceptions.HTTPError as http_err:

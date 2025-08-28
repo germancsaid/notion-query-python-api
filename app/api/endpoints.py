@@ -20,24 +20,75 @@ headers = {
     "Content-Type": "application/json"
 }
 
-@router.get("/db")
-async def get_notion_clean_data():
+def get_property_value(property_data):
     """
-    Consulta la base de datos de Notion, obtiene todos los datos paginados
-    y devuelve solo el id y las propiedades de cada resultado.
+    Extrae el valor directo de una propiedad de Notion según su tipo.
+    """
+    prop_type = property_data.get("type")
+    
+    if prop_type == "title":
+        # Maneja casos donde el título puede estar vacío
+        return property_data.get("title")[0].get("plain_text") if property_data.get("title") else ""
+    elif prop_type == "rich_text":
+        # Maneja casos donde el rich_text puede estar vacío
+        return property_data.get("rich_text")[0].get("plain_text") if property_data.get("rich_text") else ""
+    elif prop_type == "number":
+        return property_data.get("number")
+    elif prop_type == "select":
+        return property_data.get("select").get("name") if property_data.get("select") else None
+    elif prop_type == "multi_select":
+        return [tag.get("name") for tag in property_data.get("multi_select")]
+    elif prop_type == "status":
+        return property_data.get("status").get("name")
+    elif prop_type == "date":
+        return property_data.get("date").get("start") if property_data.get("date") else None
+    elif prop_type == "formula":
+        formula_type = property_data.get("formula").get("type")
+        return property_data.get("formula").get(formula_type)
+    elif prop_type == "url":
+        return property_data.get("url")
+    elif prop_type == "email":
+        return property_data.get("email")
+    elif prop_type == "phone_number":
+        return property_data.get("phone_number")
+    elif prop_type == "checkbox":
+        return property_data.get("checkbox")
+    elif prop_type == "created_time":
+        return property_data.get("created_time")
+    elif prop_type == "last_edited_time":
+        return property_data.get("last_edited_time")
+    # Añade más tipos de propiedades si es necesario
+    
+    return None
+
+@router.get("/db")
+async def get_notion_clean_data_sorted():
+    """
+    Consulta la base de datos de Notion, la ordena, obtiene todos los datos paginados
+    y devuelve una lista con el id y los valores directos de las propiedades.
     """
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
     all_results = []
     has_more = True
     next_cursor = None
+    
+    # Define la configuración de ordenamiento en el payload
+    sort_payload = {
+        "sorts": [
+            {
+                "property": "Date de création",
+                "direction": "descending"
+            }
+        ]
+    }
 
     try:
         while has_more:
-            payload = {}
+            # Añade el cursor al payload para la paginación
             if next_cursor:
-                payload["start_cursor"] = next_cursor
+                sort_payload["start_cursor"] = next_cursor
 
-            response = requests.post(url, headers=headers, json=payload)
+            response = requests.post(url, headers=headers, json=sort_payload)
             response.raise_for_status()
 
             data = response.json()
@@ -46,24 +97,21 @@ async def get_notion_clean_data():
             has_more = data.get("has_more", False)
             next_cursor = data.get("next_cursor")
 
-        # Procesa los resultados para extraer solo el id y las propiedades
+        # Procesa los resultados para extraer solo el id y los valores de las propiedades
         clean_results = []
         for item in all_results:
-            clean_item = {
-                "id": item.get("id"),
-                "properties": item.get("properties")
-            }
+            clean_item = {"id": item.get("id")}
+            for prop_name, prop_data in item.get("properties", {}).items():
+                clean_item[prop_name] = get_property_value(prop_data)
+            
             clean_results.append(clean_item)
 
         # Devuelve la lista limpia de resultados
         return clean_results
 
     except requests.exceptions.HTTPError as http_err:
-        print(f"Error HTTP: {http_err}")
-        return {"error": f"Error HTTP al conectar con la API de Notion: {http_err}"}
+        return {"error": f"Error HTTP: {http_err}"}
     except requests.exceptions.RequestException as req_err:
-        print(f"Error en la solicitud: {req_err}")
-        return {"error": f"Error en la solicitud a la API de Notion: {req_err}"}
+        return {"error": f"Error en la solicitud: {req_err}"}
     except Exception as err:
-        print(f"Otro error: {err}")
         return {"error": f"Ocurrió un error inesperado: {err}"}

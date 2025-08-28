@@ -1,24 +1,18 @@
 import os
 import requests
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException
 from dotenv import load_dotenv
 
 # Carga las variables de entorno desde un archivo .env
 load_dotenv()
 
 # Obtiene las variables de entorno
-NOTION_API_KEY = os.getenv("NOTION_API_KEY")
-NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+# NOTION_API_KEY = os.getenv("NOTION_API_KEY")
+# NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
 # Crea una instancia del enrutador de FastAPI
 router = APIRouter()
 
-# Define las cabeceras para la solicitud a la API de Notion
-headers = {
-    "Authorization": f"Bearer {NOTION_API_KEY}",
-    "Notion-Version": "2022-06-28",
-    "Content-Type": "application/json"
-}
 
 def get_property_value(property_data):
     """
@@ -59,12 +53,22 @@ def get_property_value(property_data):
     return None
 
 @router.get("/db")
-async def get_notion_clean_data_sorted():
+async def get_notion_clean_data_sorted(
+    notion_key: str = Header(..., alias="Key"), 
+    notion_db_id: str = Header(..., alias="Db")
+):
+    
+    headers = {
+    "Authorization": f"Bearer {notion_key}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json"
+    }
+    
     """
     Consulta la base de datos de Notion, la ordena por fecha de creación,
     obtiene todos los datos paginados y devuelve una lista limpia.
     """
-    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    url = f"https://api.notion.com/v1/databases/{notion_db_id}/query"
     all_results = []
     has_more = True
     next_cursor = None
@@ -113,7 +117,10 @@ async def get_notion_clean_data_sorted():
 
 
 @router.get("/metrics")
-async def get_notion_metrics():
+async def get_notion_metrics(
+    notion_key: str = Header(..., alias="Key"), 
+    notion_db_id: str = Header(..., alias="Db")
+):
     """
     Calcula métricas clave a partir de los datos de Notion:
     - Horas totales
@@ -123,7 +130,10 @@ async def get_notion_metrics():
     - Número de tareas terminadas, en curso
     """
     # Primero reutilizamos el endpoint de datos limpios
-    raw_data = await get_notion_clean_data_sorted()
+    raw_data = await get_notion_clean_data_sorted(
+        notion_key=notion_key,
+        notion_db_id=notion_db_id
+    )
     
     if isinstance(raw_data, dict) and "error" in raw_data:
         return raw_data

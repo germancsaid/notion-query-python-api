@@ -109,3 +109,58 @@ async def get_notion_clean_data_sorted():
         return {"error": f"Error en la solicitud: {req_err}"}
     except Exception as err:
         return {"error": f"Ocurrió un error inesperado: {err}"}
+    
+
+
+@router.get("/metrics")
+async def get_notion_metrics():
+    """
+    Calcula métricas clave a partir de los datos de Notion:
+    - Horas totales
+    - Horas por cliente
+    - % de participación por cliente
+    - Promedio de horas por tarea
+    - Número de tareas terminadas, en curso
+    """
+    # Primero reutilizamos el endpoint de datos limpios
+    raw_data = await get_notion_clean_data_sorted()
+    
+    if isinstance(raw_data, dict) and "error" in raw_data:
+        return raw_data
+
+    total_hours = 0
+    tasks_by_customer = {}
+    status_count = {"Terminé": 0, "En cours": 0, "Otros": 0}
+    
+    for task in raw_data:
+        horas = task.get("Horas Asignadas") or 0
+        customer = task.get("Customer") or "Sin Cliente"
+        status = task.get("Stat") or "Otros"
+
+        # Horas totales
+        total_hours += horas
+
+        # Horas por cliente
+        tasks_by_customer[customer] = tasks_by_customer.get(customer, 0) + horas
+
+        # Conteo por estado
+        if status in status_count:
+            status_count[status] += 1
+        else:
+            status_count["Otros"] += 1
+
+    # Calcular % de participación por cliente
+    distribution = []
+    for cust, hours in tasks_by_customer.items():
+        pct = round((hours / total_hours * 100), 2) if total_hours > 0 else 0
+        distribution.append({"Customer": cust, "Horas": hours, "Porcentaje": pct})
+
+    metrics = {
+        "total_hours": total_hours,
+        "tasks_count": len(raw_data),
+        "avg_hours_per_task": round(total_hours / len(raw_data), 2) if raw_data else 0,
+        "status_count": status_count,
+        "hours_distribution": distribution
+    }
+
+    return metrics

@@ -21,9 +21,10 @@ headers = {
 }
 
 @router.get("/db")
-async def get_all_notion_data():
+async def get_notion_clean_data():
     """
-    Consulta la base de datos de Notion y devuelve todos los datos paginados.
+    Consulta la base de datos de Notion, obtiene todos los datos paginados
+    y devuelve solo el id y las propiedades de cada resultado.
     """
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
     all_results = []
@@ -42,12 +43,20 @@ async def get_all_notion_data():
             data = response.json()
             all_results.extend(data.get("results", []))
             
-            # Actualiza las variables para la siguiente paginación
             has_more = data.get("has_more", False)
             next_cursor = data.get("next_cursor")
 
-        # Devuelve la respuesta completa como un objeto JSON
-        return {"object": "list", "results": all_results, "has_more": False, "next_cursor": None}
+        # Procesa los resultados para extraer solo el id y las propiedades
+        clean_results = []
+        for item in all_results:
+            clean_item = {
+                "id": item.get("id"),
+                "properties": item.get("properties")
+            }
+            clean_results.append(clean_item)
+
+        # Devuelve la lista limpia de resultados
+        return clean_results
 
     except requests.exceptions.HTTPError as http_err:
         print(f"Error HTTP: {http_err}")
